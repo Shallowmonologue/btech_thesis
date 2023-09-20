@@ -1,17 +1,3 @@
-%%MatrixMarket matrix coordinate real general
-%-------------------------------------------------------------------------------
-% UF Sparse Matrix Collection, Tim Davis
-% http://www.cise.ufl.edu/research/sparse/matrices/HB/wm1
-% name: HB/wm1
-% [U NONSYMMETRIC MATRIX COEFFICIENT MATRIX OF THE WORLD MODEL -SZYLD-IEA-]
-% id: 275
-% date: 1982
-% author: D. Szyld
-% ed: I. Duff, R. Grimes, J. Lewis
-% fields: title A name id date author ed kind
-% kind: economic problem
-%-------------------------------------------------------------------------------
-207 277 2909
 1 1 1
 8 1 -.016799998
 9 1 -.0012999999
