@@ -10,6 +10,8 @@ from tqdm.auto import tqdm
 from sklearn.metrics.cluster import normalized_mutual_info_score
 
 sns.set(style='whitegrid')
+dataset_name = 'dolphins'
+hyper_lambda = [0.2, 0.8, 1]
 
 
 def utility(node_i, S, G):
@@ -64,14 +66,14 @@ def community_ext(nodes_list):
     return modularityComm
 
 
-def join(node_i, S, G, lamda, probabilities):
+def join(node_i, S, G, lamda, probabilities, isImitate = True):
     max_utility = []
     community_toJoin = []
     currentCommunity = S[node_i]
     currentCommunity_nodes_list = np.where(S == currentCommunity)[0]
 
     loss = utility(node_i, currentCommunity_nodes_list, G)
-    # print(loss)
+
     for neighbor in G[node_i]:
         community_label = S[neighbor]
         community_toJoin.append(community_label)
@@ -79,13 +81,17 @@ def join(node_i, S, G, lamda, probabilities):
         gain = utility(node_i, nodes_list, G)
 
         community_label = S[neighbor]
-        #       print(community_label)
-        # community_toJoin.append(community_label)
         same_community_nodes_list = np.where(S == community_label)[0]
         other = community_ext(same_community_nodes_list)
-        val = lamda * (gain - loss) + (1 - lamda) * (other)
+        val = lamda * (gain - loss) + (1 - lamda) * other
         max_utility.append(val)
-        # print(nodes_list)
+
+    if isImitate:
+        n = len([i for i in G.neighbors(node_i)])
+        for neighbor in G[node_i]:
+            community_label = S[neighbor]
+            a = community_toJoin.index(community_label)
+            max_utility[a] += 1/n
 
     maximum_utility_val = max(max_utility)
     if (maximum_utility_val) > 0:
@@ -106,21 +112,16 @@ def partitionModularity(mod_list, G):
     return (totalModularity / (G.number_of_edges() * 2.0))
 
 
-def communityDetect(S, G, nIter, LAMBDA=1):
-    total_nodes = G.number_of_nodes()
-    i = 0
+def communityDetect(S, G, nIter, LAMBDA=1, isImitate=True):
     prev_S = initial_S
     val = []
-    #   while(i<nIter):
     for _ in tqdm(range(nIter)):
-        #         print("Iteration No. : ", i+1)
         probab = np.array(probabilities)
         probab /= probab.sum()
         random_node = choice(nodesList, 1, p=probab)
-        S = join(random_node[0], S, G, LAMBDA, probab)
+        S = join(random_node[0], S, G, LAMBDA, probab, isImitate)
         val.append(partitionModularity(S, G))
         prev_S = S
-    #         i += 1
 
     return val, prev_S
 
@@ -129,7 +130,7 @@ if __name__ == '__main__':
     # load dataset and process into a graph
     l1 = []
     l2 = []
-    file = open('./ia-enron-only.txt')
+    file = open('./' + dataset_name + '.txt')
     for line in file:
         l1.append(int(line.split()[0]))
         l2.append(int(line.split()[1]))
@@ -151,60 +152,30 @@ if __name__ == '__main__':
     part = community.best_partition(G)
     print('the Best Partition is: ', community.modularity(part, G))
 
+    for lambda_iter in hyper_lambda:
+        # Storage the base info of graph，Caculate LAMBDA
+        totalEdges = G.number_of_edges()
+        totalNodes = G.number_of_nodes()
+        A = nx.to_numpy_array(G)
+        S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
+        initial_S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
+        nodesList = [node_k for node_k in range(G.number_of_nodes())]
+        probabilities = [float(1 / (G.number_of_nodes() * 1.0)) for i in range(G.number_of_nodes())]
+        value_lambda = communityDetect(S, G, nIter=1000, LAMBDA=0.2, isImitate=False)
+        print('Partition Modularity = ' + str(partitionModularity(S, G)))
 
-    # Storage the base info of graph，Caculate LAMBDA=0.2
-    totalEdges = G.number_of_edges()
-    totalNodes = G.number_of_nodes()
-    A = nx.to_numpy_array(G)
-    S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-    initial_S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-    nodesList = [node_k for node_k in range(G.number_of_nodes())]
-    probabilities = [float(1 / (G.number_of_nodes() * 1.0)) for i in range(G.number_of_nodes())]
-    value_lambda_point2 = communityDetect(S, G, nIter=1000, LAMBDA=0.2)
-    print('Partition Modularity = ' + str(partitionModularity(S, G)))
+        S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
+        value_lambda_withoutImitate = communityDetect(S, G, nIter=1000, LAMBDA=0.2, isImitate=True)
+        print('Partition Modularity = ' + str(partitionModularity(S, G)))
 
-    # Storage the base info of graph，Caculate LAMBDA=0.8
-    totalEdges = G.number_of_edges()
-    totalNodes = G.number_of_nodes()
-    A = nx.to_numpy_array(G)
-    S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-    initial_S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-    nodesList = [node_k for node_k in range(G.number_of_nodes())]
-    probabilities = [float(1 / (G.number_of_nodes() * 1.0)) for i in range(G.number_of_nodes())]
-    value_lambda_point8 = communityDetect(S, G, nIter=1000, LAMBDA=0.8)
-    print('Partition Modularity = ' + str(partitionModularity(S, G)))
+        # Show the result
+        plt.style.use('fivethirtyeight')
+        sns.set(style='whitegrid')
+        plt.title(dataset_name + "Dataset")
+        sns.lineplot([i for i in range(len(value_lambda[0]))], value_lambda[0], label="lambda_"+str(lambda_iter))
+        sns.lineplot([i for i in range(len(value_lambda_withoutImitate[0]))],value_lambda_withoutImitate[0], label="lambda_"+str(lambda_iter)+"_withoutImitate")
 
-    # Storage the base info of graph，Caculate LAMBDA=1
-    totalEdges = G.number_of_edges()
-    totalNodes = G.number_of_nodes()
-    A = nx.to_numpy_array(G)
-    S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-    initial_S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-    nodesList = [node_k for node_k in range(G.number_of_nodes())]
-    probabilities = [float(1 / (G.number_of_nodes() * 1.0)) for i in range(G.number_of_nodes())]
-    value_lambda_1 = communityDetect(S, G, nIter=1000, LAMBDA=1)
-    print('Partition Modularity = ' + str(partitionModularity(S, G)))
-
-
-    # Show the result
-    plt.style.use('fivethirtyeight')
-    sns.set(style='whitegrid')
-    plt.title("Enron Dataset")
-    sns.lineplot([i for i in range(len(value_lambda_point2[0]))], value_lambda_point2[0], label="lambda 0.2")
-    sns.lineplot([i for i in range(len(value_lambda_point8[0]))], value_lambda_point8[0], label="lambda 0.8")
-
-    plt.xlabel("No. of iterations")
-    plt.ylabel("Modularity Value")
-    plt.legend()
-    plt.savefig("Enron_1.svg")
-
-    plt.style.use('fivethirtyeight')
-    sns.set(style='whitegrid')
-    plt.title("Enron Dataset")
-    sns.lineplot([i for i in range(len(value_lambda_1[0]))], value_lambda_1[0], label="lambda 1")
-    sns.lineplot([i for i in range(len(value_lambda_point8[0]))], value_lambda_point8[0], label="lambda 0.8")
-
-    plt.xlabel("No. of iterations")
-    plt.ylabel("Modularity Value")
-    plt.legend()
-    plt.savefig("Enron_2.svg")
+        plt.xlabel("No. of iterations")
+        plt.ylabel("Modularity Value")
+        plt.legend()
+        plt.savefig(dataset_name+"_lambda_"+str(lambda_iter)+".jpg")
