@@ -7,11 +7,13 @@ import numpy as np
 import seaborn as sns
 from numpy.random import choice
 from tqdm.auto import tqdm
+import csv
 from sklearn.metrics.cluster import normalized_mutual_info_score
 
 sns.set(style='whitegrid')
-dataset_name = 'dolphins'
-hyper_lambda = [0.2, 0.8, 1]
+dataset_name = ['dolphins','enron','karate']
+hyper_lambda = [0.2, 0.5, 0.8, 1]
+repeat = 10
 
 
 def utility(node_i, S, G):
@@ -30,11 +32,14 @@ def utility(node_i, S, G):
     return total_utility
 
 
+def degreeDecreaseSort():
+    ...
+
+
 def internalCommunityEdges(nodes_list, community_label):
     internaledges = 0
     for node in nodes_list:
         p = len(np.where(S[[n for n in G.neighbors(node)]] == community_label)[0])
-        # print(node)
         internaledges += p
 
     inter = internaledges / (2.0)
@@ -86,6 +91,7 @@ def join(node_i, S, G, lamda, probabilities, isImitate = True):
         val = lamda * (gain - loss) + (1 - lamda) * other
         max_utility.append(val)
 
+    # Imitate neighbor's decision
     if isImitate:
         n = len([i for i in G.neighbors(node_i)])
         for neighbor in G[node_i]:
@@ -98,7 +104,6 @@ def join(node_i, S, G, lamda, probabilities, isImitate = True):
         probabilities[node_i] *= (1 - lamda)
     maxUtilityIndex = max_utility.index(maximum_utility_val)
     communityIndex = community_toJoin[maxUtilityIndex]
-    # print(communityIndex)
 
     # update the community for node_i
     S[node_i] = communityIndex
@@ -127,55 +132,77 @@ def communityDetect(S, G, nIter, LAMBDA=1, isImitate=True):
 
 
 if __name__ == '__main__':
-    # load dataset and process into a graph
-    l1 = []
-    l2 = []
-    file = open('./' + dataset_name + '.txt')
-    for line in file:
-        l1.append(int(line.split()[0]))
-        l2.append(int(line.split()[1]))
-    df = pd.DataFrame()
-    df[1] = l1
-    df[2] = l2
+    for dataset in dataset_name:
+        # load dataset and process into a graph
+        l1 = []
+        l2 = []
+        file = open('./' + dataset + '.txt')
+        for line in file:
+            l1.append(int(line.split()[0]))
+            l2.append(int(line.split()[1]))
+        df = pd.DataFrame()
+        df[1] = l1
+        df[2] = l2
 
-    G = nx.Graph()
-    G = nx.from_pandas_edgelist(df, 1, 2)
-    mapping = {}
-    i = 0
-    for node in G.nodes:
-        mapping[node] = i
-        i += 1
-    G = nx.relabel_nodes(G, mapping)
-    print(nx.info(G))
+        G = nx.Graph()
+        G = nx.from_pandas_edgelist(df, 1, 2)
+        mapping = {}
+        i = 0
+        for node in G.nodes:
+            mapping[node] = i
+            i += 1
+        G = nx.relabel_nodes(G, mapping)
+        print(nx.info(G))
 
-    # Calculate the best partition for MODULARITY as evaluation
-    part = community.best_partition(G)
-    print('the Best Partition is: ', community.modularity(part, G))
+        # Calculate the best partition for MODULARITY as evaluation
+        part = community.best_partition(G)
+        print('the Best Partition is: ', community.modularity(part, G))
 
-    for lambda_iter in hyper_lambda:
-        # Storage the base info of graph，Caculate LAMBDA
-        totalEdges = G.number_of_edges()
-        totalNodes = G.number_of_nodes()
-        A = nx.to_numpy_array(G)
-        S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-        initial_S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-        nodesList = [node_k for node_k in range(G.number_of_nodes())]
-        probabilities = [float(1 / (G.number_of_nodes() * 1.0)) for i in range(G.number_of_nodes())]
-        value_lambda = communityDetect(S, G, nIter=1000, LAMBDA=0.2, isImitate=False)
-        print('Partition Modularity = ' + str(partitionModularity(S, G)))
+        for lambda_iter in hyper_lambda:
+            # repeat 10 times to caculate average
+            all_value = []
+            all_value_withoutImitate = []
 
-        S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-        value_lambda_withoutImitate = communityDetect(S, G, nIter=1000, LAMBDA=0.2, isImitate=True)
-        print('Partition Modularity = ' + str(partitionModularity(S, G)))
+            for repeat_iter in range(repeat):
+                # Storage the base info of graph，Caculate LAMBDA
+                totalEdges = G.number_of_edges()
+                totalNodes = G.number_of_nodes()
+                A = nx.to_numpy_array(G)
+                S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
+                initial_S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
+                nodesList = [node_k for node_k in range(G.number_of_nodes())]
+                probabilities = [float(1 / (G.number_of_nodes() * 1.0)) for i in range(G.number_of_nodes())]
+                value = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=False)
+                modularity = partitionModularity(S, G)
+                print('\nisImitate = False\nModularity = ' + str(modularity))
 
-        # Show the result
-        plt.style.use('fivethirtyeight')
-        sns.set(style='whitegrid')
-        plt.title(dataset_name + "Dataset")
-        sns.lineplot([i for i in range(len(value_lambda[0]))], value_lambda[0], label="lambda_"+str(lambda_iter))
-        sns.lineplot([i for i in range(len(value_lambda_withoutImitate[0]))],value_lambda_withoutImitate[0], label="lambda_"+str(lambda_iter)+"_withoutImitate")
+                S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
+                value_withoutImitate = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=True)
+                modularity_withoutImitate = partitionModularity(S, G)
+                print('\nisImitate = True\nModularity = ' + str(modularity_withoutImitate))
 
-        plt.xlabel("No. of iterations")
-        plt.ylabel("Modularity Value")
-        plt.legend()
-        plt.savefig(dataset_name+"_lambda_"+str(lambda_iter)+".jpg")
+                if repeat_iter == 0:
+                    # Show the result
+                    plt.style.use('fivethirtyeight')
+                    sns.set(style='whitegrid')
+                    plt.title(dataset + "Dataset")
+                    sns.lineplot(x=[i for i in range(len(value[0]))], y=value[0], label="lambda_"+str(lambda_iter))
+                    sns.lineplot(x=[i for i in range(len(value_withoutImitate[0]))],y=value_withoutImitate[0],
+                                 label="lambda_"+str(lambda_iter)+"_withoutImitate")
+
+                    plt.xlabel("No. of iterations")
+                    plt.ylabel("Modularity Value")
+                    plt.legend()
+                    plt.savefig(dataset+"_lambda_"+str(lambda_iter)+".jpg")
+                    plt.clf()
+
+                # store repeat
+                all_value.append(modularity)
+                all_value_withoutImitate.append(modularity_withoutImitate)
+
+            df = pd.DataFrame({'all_value': np.array(all_value),
+                               'all_value_withoutImitate': np.array(all_value_withoutImitate),
+                               'average_all_value': sum(all_value)/repeat,
+                               'average_all_value_withoutImitate': sum(all_value_withoutImitate)/repeat})
+            df.to_csv(dataset+'_lambda_'+str(lambda_iter)+'.csv', index=False)
+
