@@ -16,7 +16,6 @@ def utility(node_i, S, G):
     for node_j in S:
         if node_i != node_j:
             curr_edges = A[node_i][node_j]
-
             k_j = G.degree[node_j]
             m = G.number_of_edges()
             degree_prod = (k_i * k_j) / (2.0 * m)
@@ -180,15 +179,15 @@ def saveResult(value1, value2, name_set):
     dataset, parameters = name_set
     df = pd.DataFrame({'improve': np.array(value1),
                        'base': np.array(value2),
-                       'average_improve': sum(all_value) / repeat,
-                       'average_base': sum(all_value_withoutImitate) / repeat})
+                       'average_improve': sum(value1) / repeat,
+                       'average_base': sum(value2) / repeat})
     df.to_csv(dataset + '_lambda_' + str(parameters) + '.csv', index=False)
 
 
 if __name__ == '__main__':
     # hyperparameters
     # dataset_name = ['dolphins', 'enron', 'karate']
-    dataset_name = ['tribes', 'zebra']
+    dataset_name = ['football']
     hyper_lambda = [0.2, 0.5, 0.8, 1]
     repeat = 10
 
@@ -212,19 +211,19 @@ if __name__ == '__main__':
 
                 # Caculate origin algorithm
                 S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-                value = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=False)
+                value_base = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=False)
                 modularity = partitionModularity(S, G)
                 print('\n---BASE----\nModularity = ' + str(modularity))
 
                 # Caculate new algorithm
                 S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-                value_withoutImitate = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=True)
+                value_improve = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=True)
                 modularity_withoutImitate = partitionModularity(S, G)
                 print('\n---IMPROVE---\nModularity = ' + str(modularity_withoutImitate))
 
                 # draw compared Pic for the first times
                 if repeat_iter == 0:
-                    drawCompareGraph(value, value_withoutImitate, ['./pic/'+dataset, lambda_iter])
+                    drawCompareGraph(value_base, value_improve, ['./pic/'+dataset, lambda_iter])
 
                 # store repeat
                 all_value.append(modularity)
