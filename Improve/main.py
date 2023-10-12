@@ -125,13 +125,23 @@ def communityDetect(S, G, nIter, LAMBDA=1, isImitate=True):
 
     prev_S = initial_S
     val = []
-    for _ in tqdm(range(nIter)):
-        probab = np.array(probabilities)
-        probab /= probab.sum()
-        random_node = choice(nodesList, 1, p=probab)
-        S = join(random_node[0], S, G, LAMBDA, probab, isImitate)
-        val.append(partitionModularity(S, G))
-        prev_S = S
+    with tqdm(total=nIter) as t:
+        for n in range(nIter):
+            probab = np.array(probabilities)
+            probab /= probab.sum()
+            random_node = choice(nodesList, 1, p=probab)
+            S = join(random_node[0], S, G, LAMBDA, probab, isImitate)
+            prev_S = S
+
+            result = partitionModularity(S, G)
+            val.append(result)
+            t.set_postfix(modularity=result)
+            t.update(1)
+
+            if n > 100:
+                if val[-100:] == val[-200:-100]:
+                    t.close()
+                    break
     return val, prev_S
 
 
@@ -146,7 +156,6 @@ def loadDataset(path):
     df[1] = l1
     df[2] = l2
 
-    # G = nx.Graph()
     G = nx.from_pandas_edgelist(df, 1, 2)
     mapping = {}
     i = 0
@@ -166,7 +175,7 @@ def drawCompareGraph(value1, value2, name_set):
     plt.title(dataset + "Dataset")
     sns.lineplot(x=[i for i in range(len(value1[0]))], y=value1[0], label="lambda_" + str(parameters))
     sns.lineplot(x=[i for i in range(len(value2[0]))], y=value2[0],
-                 label="lambda_" + str(parameters) + "_withoutImitate")
+                 label="lambda_" + str(parameters) + "_improve")
 
     plt.xlabel("No. of iterations")
     plt.ylabel("Modularity Value")
@@ -177,57 +186,57 @@ def drawCompareGraph(value1, value2, name_set):
 
 def saveResult(value1, value2, name_set):
     dataset, parameters = name_set
-    df = pd.DataFrame({'improve': np.array(value1),
-                       'base': np.array(value2),
-                       'average_improve': sum(value1) / repeat,
-                       'average_base': sum(value2) / repeat})
+    df = pd.DataFrame({'base': np.array(value1),
+                       'improve': np.array(value2),
+                       'average_base': sum(value1) / repeat,
+                       'average_improve': sum(value2) / repeat})
     df.to_csv(dataset + '_lambda_' + str(parameters) + '.csv', index=False)
 
 
 if __name__ == '__main__':
     # hyperparameters
-    # dataset_name = ['dolphins', 'enron', 'karate']
-    dataset_name = ['football']
+    # dataset_name = ['dolphins', 'enron', 'karate', 'football', 'retweet']
+    # dataset_name = ['fb-pages-food','fb-pages-politician','erdos992']
+    dataset_name = ['enron']
     hyper_lambda = [0.2, 0.5, 0.8, 1]
     repeat = 10
 
     for dataset in dataset_name:
         # load dataset and process into a graph
         G = loadDataset('./dataset/' + dataset + '.txt')
-
-        # Calculate the best partition for MODULARITY as evaluation
-        part = community.best_partition(G)
-        print('the Best Partition is: ', community.modularity(part, G))
+        tqdm.write('the Dataset is: '+dataset)
+        niter = G.number_of_nodes()**2
 
         for lambda_iter in hyper_lambda:
             # repeat to caculate average
-            all_value = []
-            all_value_withoutImitate = []
-
+            tqdm.write('\nthe hyperparameter lamda is: '+str(lambda_iter))
+            all_value_base = []
+            all_value_improve = []
 
             for repeat_iter in range(repeat):
                 # Storage the base info of graph，calculate LAMBDA
+                tqdm.write('---repeat for '+ str(repeat_iter)+ ' times---')
                 A = nx.to_numpy_array(G)
 
-                # Caculate origin algorithm
+                # Calculate origin algorithm
                 S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-                value_base = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=False)
-                modularity = partitionModularity(S, G)
-                print('\n---BASE----\nModularity = ' + str(modularity))
+                value_base = communityDetect(S, G, nIter=niter, LAMBDA=lambda_iter, isImitate=False)
+                modularity_base = partitionModularity(S, G)
+                tqdm.write('BASE: Modularity = ' + str(modularity_base))
 
-                # Caculate new algorithm
+                # Calculate new algorithm
                 S = np.array([("C" + str(i)) for i in range(G.number_of_nodes())])
-                value_improve = communityDetect(S, G, nIter=1000, LAMBDA=lambda_iter, isImitate=True)
-                modularity_withoutImitate = partitionModularity(S, G)
-                print('\n---IMPROVE---\nModularity = ' + str(modularity_withoutImitate))
+                value_improve = communityDetect(S, G, nIter=niter, LAMBDA=lambda_iter, isImitate=True)
+                modularity_improve = partitionModularity(S, G)
+                tqdm.write('IMPROVE: Modularity = ' + str(modularity_improve))
 
                 # draw compared Pic for the first times
                 if repeat_iter == 0:
                     drawCompareGraph(value_base, value_improve, ['./pic/'+dataset, lambda_iter])
 
                 # store repeat
-                all_value.append(modularity)
-                all_value_withoutImitate.append(modularity_withoutImitate)
+                all_value_base.append(modularity_base)
+                all_value_improve.append(modularity_improve)
 
             # save to .csv
-            saveResult(all_value, all_value_withoutImitate, ['./result/'+dataset, lambda_iter])
+            saveResult(all_value_base, all_value_improve, ['./result/'+dataset, lambda_iter])
